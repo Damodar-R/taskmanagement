@@ -184,12 +184,19 @@ const TaskForm = ({ taskToEdit, onSubmit, onCancel }) => {
       completed: taskToEdit ? taskToEdit.completed : false,
     };
     onSubmit(newTask);
+
+    // Reset form fields after submission
+    setTitle('');
+    setDescription('');
+    setDueDate('');
+    setPriority('low');
   };
 
   return (
     <div className="task-form p-4 border rounded-lg shadow-md mb-4 bg-white">
       <h2 className="font-semibold">{taskToEdit ? 'Edit Task' : 'Add New Task'}</h2>
       <form onSubmit={handleSubmit} className="flex flex-wrap gap-4">
+        {/* Title Input */}
         <div className="flex flex-col">
           <label>Title</label>
           <input
@@ -200,6 +207,7 @@ const TaskForm = ({ taskToEdit, onSubmit, onCancel }) => {
             required
           />
         </div>
+        {/* Description Input */}
         <div className="flex flex-col">
           <label>Description</label>
           <textarea
@@ -209,6 +217,7 @@ const TaskForm = ({ taskToEdit, onSubmit, onCancel }) => {
             required
           />
         </div>
+        {/* Due Date Input */}
         <div className="flex flex-col">
           <label>Due Date</label>
           <input
@@ -218,6 +227,7 @@ const TaskForm = ({ taskToEdit, onSubmit, onCancel }) => {
             className="border p-2"
           />
         </div>
+        {/* Priority Select */}
         <div className="flex flex-col">
           <label>Priority</label>
           <select
@@ -230,11 +240,20 @@ const TaskForm = ({ taskToEdit, onSubmit, onCancel }) => {
             <option value="high">High</option>
           </select>
         </div>
+        {/* Submit and Cancel Buttons */}
         <div className="flex items-end">
           <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
             {taskToEdit ? 'Update Task' : 'Add Task'}
           </button>
-          
+          {taskToEdit && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="bg-gray-500 text-white px-4 py-2 rounded"
+            >
+              Cancel
+            </button>
+          )}
         </div>
       </form>
     </div>

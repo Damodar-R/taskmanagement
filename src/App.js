@@ -1,281 +1,213 @@
-import React, { useState, useEffect, useContext, createContext } from 'react';
-import { DndProvider, useDrag, useDrop } from 'react-dnd';
-import { HTML5Backend } from 'react-dnd-html5-backend';
+import React, { useState, useEffect } from 'react';
 import './App.css';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
-// Create TaskContext
-const TaskContext = createContext();
+// Custom Hook for managing form input
+function useForm(initialState) {
+  const [values, setValues] = useState(initialState);
+  const handleChange = (e) => {
+    setValues({
+      ...values,
+      [e.target.name]: e.target.value,
+    });
+  };
+  return { values, handleChange, setValues };
+}
 
-// TaskProvider Component
-const TaskProvider = ({ children }) => {
+const App = () => {
   const [tasks, setTasks] = useState([]);
+  const [editingTask, setEditingTask] = useState(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [filterPriority, setFilterPriority] = useState('all');
+  const [showModal, setShowModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // New state for search
+  const { values, handleChange, setValues } = useForm({ title: '', description: '', dueDate: '', priority: 'low', category: '' });
 
   useEffect(() => {
     const savedTasks = JSON.parse(localStorage.getItem('tasks')) || [];
     setTasks(savedTasks);
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'dark') setIsDarkMode(true);
   }, []);
 
   useEffect(() => {
     localStorage.setItem('tasks', JSON.stringify(tasks));
   }, [tasks]);
 
-  const addTask = (task) => setTasks([...tasks, task]);
-  const updateTask = (updatedTask) => {
-    setTasks(tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)));
-  };
-  const deleteTask = (taskId) => setTasks(tasks.filter((task) => task.id !== taskId));
+  useEffect(() => {
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+    document.body.className = isDarkMode ? 'dark-mode' : 'light-mode';
+  }, [isDarkMode]);
 
-  const moveTask = (dragIndex, hoverIndex) => {
-    const updatedTasks = [...tasks];
-    const [draggedTask] = updatedTasks.splice(dragIndex, 1);
-    updatedTasks.splice(hoverIndex, 0, draggedTask);
-    setTasks(updatedTasks);
-  };
+  // Create or Edit task
+  const handleSaveTask = (e) => {
+    e.preventDefault();
+    const newTask = { ...values, completed: false, id: editingTask ? editingTask.id : Date.now() };
 
-  return (
-    <TaskContext.Provider value={{ tasks, addTask, updateTask, deleteTask, moveTask }}>
-      {children}
-    </TaskContext.Provider>
-  );
-};
-
-const TaskCard = ({ task, index, onEditClick }) => {
-  const { deleteTask, updateTask, moveTask } = useContext(TaskContext);
-
-  const [, ref] = useDrop({
-    accept: 'task',
-    hover: (item) => {
-      if (item.index !== index) {
-        moveTask(item.index, index);
-        item.index = index;
-      }
-    },
-  });
-
-  const [{ isDragging }, drag] = useDrag({
-    type: 'task',
-    item: { id: task.id, index },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
-
-  return (
-    <div
-      ref={(node) => drag(ref(node))}
-      className="task-card p-4 border rounded-lg shadow-md mb-4 bg-white"
-      style={{ opacity: isDragging ? 0.5 : 1 }}
-    >
-      <h2 className="font-semibold">{task.title}</h2>
-      <p>{task.description}</p>
-      <p>Due: {task.dueDate || 'No due date'}</p>
-      <p>Priority: {task.priority}</p>
-      <button onClick={() => deleteTask(task.id)} className="bg-red-500 text-white px-2 py-1 rounded">
-        Delete
-      </button>
-      <button onClick={() => updateTask({ ...task, completed: !task.completed })} className="bg-blue-500 text-white px-2 py-1 rounded ml-2">
-        {task.completed ? 'Mark Incomplete' : 'Mark Complete'}
-      </button>
-      <button onClick={() => onEditClick(task)} className="bg-yellow-500 text-white px-2 py-1 rounded ml-2">
-        Update
-      </button>
-    </div>
-  );
-};
-
-const TaskList = () => {
-  const { tasks, updateTask } = useContext(TaskContext);
-  const [taskToEdit, setTaskToEdit] = useState(null);
-  const [filter, setFilter] = useState('all');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-
-  const handleEditClick = (task) => setTaskToEdit(task);
-  const handleUpdateTask = (updatedTask) => {
-    updateTask(updatedTask);
-    setTaskToEdit(null);
-  };
-
-  const filteredTasks = tasks.filter((task) => {
-    const today = new Date().toISOString().split('T')[0];
-
-    if (filter === 'today' && task.dueDate !== today) return false;
-    if (filter === 'tomorrow') {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      if (task.dueDate !== tomorrow.toISOString().split('T')[0]) return false;
+    if (editingTask) {
+      setTasks(tasks.map((task) => (task.id === editingTask.id ? newTask : task)));
+      setEditingTask(null);
+    } else {
+      setTasks([...tasks, newTask]);
     }
-    if (filter === 'specific' && selectedDate && task.dueDate !== selectedDate) return false;
-    if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
+    setValues({ title: '', description: '', dueDate: '', priority: 'low', category: '' });
+    setShowModal(false); // Close the modal after saving
+  };
 
-    return true;
-  });
+  // Edit task
+  const handleEdit = (task) => {
+    setEditingTask(task);
+    setValues({ title: task.title, description: task.description, dueDate: task.dueDate, priority: task.priority, category: task.category });
+    setShowModal(true); // Open the modal for editing
+  };
+
+  // Delete task
+  const handleDelete = (id) => {
+    setTasks(tasks.filter((task) => task.id !== id));
+  };
+
+  // Mark task as completed
+  const handleComplete = (id) => {
+    setTasks(tasks.map((task) => (task.id === id ? { ...task, completed: !task.completed } : task)));
+  };
+
+  // Toggle Dark/Light Theme
+  const toggleTheme = () => {
+    setIsDarkMode(!isDarkMode);
+  };
+
+  // Filter tasks by priority
+  const filteredTasks = filterPriority === 'all' ? tasks : tasks.filter(task => task.priority === filterPriority);
+
+  // Search tasks based on title or description
+  const searchFilteredTasks = filteredTasks.filter(
+    (task) =>
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.description.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="task-list">
-      <div className="mb-4">
-        <label>Filter by Due Date: </label>
-        <select
-          value={filter}
-          onChange={(e) => {
-            setFilter(e.target.value);
-            if (e.target.value !== 'specific') setSelectedDate('');
-          }}
-          className="border p-2 mb-2"
-        >
-          <option value="all">All</option>
-          <option value="today">Today</option>
-          <option value="tomorrow">Tomorrow</option>
-          <option value="specific">Select by Date</option>
-        </select>
-        {filter === 'specific' && (
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="border p-2 ml-2"
-          />
+    <div className="container">
+      <h1>Task Management Dashboard</h1>
+      <button className="btn btn-secondary btn-sm" onClick={toggleTheme}>
+        {isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+      </button>
+
+      {/* Button to open the modal */}
+      <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}>
+        Add Task
+      </button>
+
+      {/* Search Input */}
+      <div className="mb-3">
+        <input
+          type="text"
+          placeholder="Search tasks..."
+          className="form-control"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
+      {/* Bootstrap Modal for adding/editing tasks */}
+      <div className={`modal fade ${showModal ? 'show' : ''}`} tabIndex="-1" style={{ display: showModal ? 'block' : 'none' }} aria-hidden="true">
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">{editingTask ? 'Edit Task' : 'Add Task'}</h5>
+              <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
+            </div>
+            <div className="modal-body">
+              <form onSubmit={handleSaveTask}>
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    name="title"
+                    value={values.title}
+                    onChange={handleChange}
+                    placeholder="Task Title"
+                    required
+                    className="form-control"
+                  />
+                </div>
+                <div className="mb-3">
+                  <textarea
+                    name="description"
+                    value={values.description}
+                    onChange={handleChange}
+                    placeholder="Task Description"
+                    required
+                    className="form-control"
+                  />
+                </div>
+                <div className="mb-3">
+                  <input
+                    type="date"
+                    name="dueDate"
+                    value={values.dueDate}
+                    onChange={handleChange}
+                    required
+                    className="form-control"
+                  />
+                </div>
+                <div className="mb-3">
+                  <select name="priority" value={values.priority} onChange={handleChange} className="form-select">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div className="mb-3">
+                  
+                </div>
+                <button type="submit" className="btn btn-primary">
+                  {editingTask ? 'Update Task' : 'Add Task'}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Filter by Priority</h3>
+  <div class="btn-group" role="group" aria-label="arial"> 
+    <button class="btn btn-info" onClick={() => setFilterPriority('all')}>All</button>
+      <button class="btn btn-info" onClick={() => setFilterPriority('low')}>Low</button>
+      <button class="btn btn-info" onClick={() => setFilterPriority('medium')}>Medium</button>
+      <button class="btn btn-info" onClick={() => setFilterPriority('high')}>High</button></div>
+
+   
+
+      <h3>Task List</h3>
+      <div className="task-list">
+        {searchFilteredTasks.length === 0 ? (
+          <p>No tasks found</p>
+        ) : (
+          searchFilteredTasks.map((task) => (
+            <div key={task.id} className={`task ${task.completed ? 'completed' : ''}`}>
+              <div className="task-info">
+                <h3>{task.title}</h3>
+                <p>{task.description}</p>
+                <p>Due: {task.dueDate} | Priority: {task.priority}</p>
+                {task.category && <p>Category: {task.category}</p>}
+              </div>
+              <div className="task-actions">
+                <button  class="btn btn-primary btn-sm" onClick={() => handleComplete(task.id)}>
+                  {task.completed ? 'Completed' : 'Mark as Completed'}
+                </button>
+                <button className="btn btn-primary" onClick={() => handleEdit(task)}>
+                  Update
+                </button>
+                <button className="btn btn-danger" onClick={() => handleDelete(task.id)}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
         )}
       </div>
-
-      <div className="mb-4">
-        <label>Filter by Priority: </label>
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value)}
-          className="border p-2 mb-2"
-        >
-          <option value="all">All</option>
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-        </select>
-      </div>
-
-      {filteredTasks.map((task, index) => (
-        <TaskCard key={task.id} task={task} index={index} onEditClick={handleEditClick} />
-      ))}
-
-      {taskToEdit && (
-        <TaskForm
-          taskToEdit={taskToEdit}
-          onSubmit={handleUpdateTask}
-          onCancel={() => setTaskToEdit(null)}
-        />
-      )}
     </div>
   );
 };
 
-const TaskForm = ({ taskToEdit, onSubmit, onCancel }) => {
-  const [title, setTitle] = useState(taskToEdit ? taskToEdit.title : '');
-  const [description, setDescription] = useState(taskToEdit ? taskToEdit.description : '');
-  const [dueDate, setDueDate] = useState(taskToEdit ? taskToEdit.dueDate : '');
-  const [priority, setPriority] = useState(taskToEdit ? taskToEdit.priority : 'low');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const newTask = {
-      id: taskToEdit ? taskToEdit.id : Date.now().toString(),
-      title,
-      description,
-      dueDate,
-      priority,
-      completed: taskToEdit ? taskToEdit.completed : false,
-    };
-    onSubmit(newTask);
-
-    // Reset form fields after submission
-    setTitle('');
-    setDescription('');
-    setDueDate('');
-    setPriority('low');
-  };
-
-  return (
-    <div className="task-form p-4 border rounded-lg shadow-md mb-4 bg-white">
-      <h2 className="font-semibold">{taskToEdit ? 'Edit Task' : 'Add New Task'}</h2>
-      <form onSubmit={handleSubmit} className="flex flex-wrap gap-4">
-        {/* Title Input */}
-        <div className="flex flex-col">
-          <label>Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="border p-2"
-            required
-          />
-        </div>
-        {/* Description Input */}
-        <div className="flex flex-col">
-          <label>Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="border p-2"
-            required
-          />
-        </div>
-        {/* Due Date Input */}
-        <div className="flex flex-col">
-          <label>Due Date</label>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="border p-2"
-          />
-        </div>
-        {/* Priority Select */}
-        <div className="flex flex-col">
-          <label>Priority</label>
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            className="border p-2"
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </div>
-        {/* Submit and Cancel Buttons */}
-        <div className="flex items-end">
-          <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded mr-2">
-            {taskToEdit ? 'Update Task' : 'Add Task'}
-          </button>
-          {taskToEdit && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="bg-gray-500 text-white px-4 py-2 rounded"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      </form>
-    </div>
-  );
-};
-
-
-const TaskManagementDashboard = () => (
-  <TaskProvider>
-    <DndProvider backend={HTML5Backend}>
-      <div className="dashboard p-4">
-        <h1 className="text-2xl font-bold mb-4">Task Management Dashboard</h1>
-        <TaskFormWrapper />
-        <TaskList />
-      </div>
-    </DndProvider>
-  </TaskProvider>
-);
-
-const TaskFormWrapper = () => {
-  const { addTask } = useContext(TaskContext);
-  return <TaskForm onSubmit={addTask} />;
-};
-
-export default TaskManagementDashboard;
+export default App;
